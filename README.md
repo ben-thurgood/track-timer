@@ -11,7 +11,7 @@ An Android app that times Hot Wheels cars between a START and FINISH box drawn o
 
 ## Using it
 
-1. Prop the phone up (a tripod or a pile of books) so the whole track is in view. Keep it still, because any wobble looks like a moving car.
+1. Prop the phone up (a tripod or a pile of books) so the whole track is in view. Portrait or landscape both work. Turn auto-rotate on to switch, and the boxes stay over the same bit of track when you rotate. Keep it still, because any wobble looks like a moving car.
 2. Drag the green **START** box over the start of the track and the orange **FINISH** box over the end. Use the round handle to resize a box. Narrow boxes across the track work best.
 3. Press **Ready!** The app spends a moment learning what the empty track looks like and then locks exposure.
 4. Let the car go. You'll hear a beep at the start and another at the finish, and the time is added to the list (★ marks the best).

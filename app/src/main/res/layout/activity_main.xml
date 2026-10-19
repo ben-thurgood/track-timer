@@ -1,107 +1,132 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Works in portrait and landscape: camera area fills the space above the control bar.
+     MainActivity flips the control bar between one row (landscape) and two rows (portrait). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000"
-    android:keepScreenOn="true">
+    android:keepScreenOn="true"
+    android:orientation="vertical">
 
-    <!-- Camera feed. fitCenter so the whole frame is visible and the boxes map 1:1 to the analysed image. -->
-    <androidx.camera.view.PreviewView
-        android:id="@+id/previewView"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginBottom="64dp"
-        app:scaleType="fitCenter" />
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-    <!-- Draggable START / FINISH boxes drawn over the preview -->
-    <com.thurgood.hotwheelstimer.OverlayView
-        android:id="@+id/overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginBottom="64dp" />
+        <!-- Camera feed. fitCenter so the whole frame is visible and the boxes map 1:1 to the analysed image. -->
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:scaleType="fitCenter" />
 
-    <!-- Big timer readout -->
-    <TextView
-        android:id="@+id/timeText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="8dp"
-        android:background="#99000000"
-        android:fontFamily="monospace"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="4dp"
-        android:text="0.000 s"
-        android:textColor="#FFFFFF"
-        android:textSize="40sp"
-        android:textStyle="bold" />
+        <!-- Draggable START / FINISH boxes drawn over the preview -->
+        <com.thurgood.hotwheelstimer.OverlayView
+            android:id="@+id/overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
 
-    <!-- Status + fps, top left -->
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
-        android:layout_margin="8dp"
-        android:background="#99000000"
-        android:padding="6dp"
-        android:text="Starting camera…"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp" />
+        <!-- Big timer readout -->
+        <TextView
+            android:id="@+id/timeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="8dp"
+            android:background="#99000000"
+            android:fontFamily="monospace"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="4dp"
+            android:text="0.000 s"
+            android:textColor="#FFFFFF"
+            android:textSize="40sp"
+            android:textStyle="bold" />
 
-    <!-- Results list, top right -->
-    <TextView
-        android:id="@+id/resultsText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_margin="8dp"
-        android:background="#99000000"
-        android:fontFamily="monospace"
-        android:minWidth="120dp"
-        android:padding="6dp"
-        android:text="Results"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp" />
+        <!-- Results list, top right, below the timer so they never overlap in portrait -->
+        <TextView
+            android:id="@+id/resultsText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="76dp"
+            android:layout_marginEnd="8dp"
+            android:background="#99000000"
+            android:fontFamily="monospace"
+            android:minWidth="120dp"
+            android:padding="6dp"
+            android:text="Results"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
 
-    <!-- Bottom control bar -->
+        <!-- Status + fps, bottom left of the camera area -->
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="8dp"
+            android:background="#99000000"
+            android:padding="6dp"
+            android:text="Starting camera…"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+    </FrameLayout>
+
+    <!-- Control bar: horizontal in landscape, vertical (two rows) in portrait -->
     <LinearLayout
+        android:id="@+id/controls"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:layout_gravity="bottom"
+        android:layout_height="wrap_content"
         android:background="#222222"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="8dp">
+        android:padding="8dp">
 
-        <Button
-            android:id="@+id/armButton"
+        <LinearLayout
+            android:id="@+id/buttonRow"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minWidth="120dp"
-            android:text="Ready!" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/clearButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="Clear results" />
+            <Button
+                android:id="@+id/armButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="120dp"
+                android:text="Ready!" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:text="Sensitivity"
-            android:textColor="#FFFFFF" />
+            <Button
+                android:id="@+id/clearButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Clear results" />
+        </LinearLayout>
 
-        <SeekBar
-            android:id="@+id/sensitivityBar"
+        <LinearLayout
+            android:id="@+id/sliderRow"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
             android:layout_weight="1"
-            android:max="100"
-            android:progress="70" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sensitivity"
+                android:textColor="#FFFFFF" />
+
+            <SeekBar
+                android:id="@+id/sensitivityBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="70" />
+        </LinearLayout>
     </LinearLayout>
-</FrameLayout>
+</LinearLayout>

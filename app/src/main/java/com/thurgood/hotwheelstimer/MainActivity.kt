@@ -2,7 +2,11 @@ package com.thurgood.hotwheelstimer
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.RectF
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.display.DisplayManager
+import android.widget.LinearLayout
 import android.hardware.camera2.CaptureRequest
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -40,7 +44,16 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
     private lateinit var cameraExecutor: ExecutorService
     private val timer = TrackTimer(this)
     private var camera: Camera? = null
+    private var preview: Preview? = null
+    private var analysis: ImageAnalysis? = null
     private var tone: ToneGenerator? = null
+
+    // Fires on every rotation, including 180° flips that don't trigger a configuration change.
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) = updateTargetRotation()
+    }
 
     private var lastState = State.IDLE
     private var fpsRangeText = ""
@@ -59,6 +72,9 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         tone = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 80) }.getOrNull()
+
+        applyControlsLayout(resources.configuration.orientation)
+        getSystemService(DisplayManager::class.java).registerDisplayListener(displayListener, null)
 
         binding.overlay.onBoxesChanged = { pushBoxes() }
         binding.overlay.post { pushBoxes() }
@@ -89,6 +105,35 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
         ) startCamera() else permissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+
+    // ---------------- rotation ----------------
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyControlsLayout(newConfig.orientation)
+        updateTargetRotation()
+    }
+
+    /** Landscape: buttons and slider on one row. Portrait: buttons row, then slider row. */
+    private fun applyControlsLayout(orientation: Int) {
+        val landscape = orientation == Configuration.ORIENTATION_LANDSCAPE
+        val density = resources.displayMetrics.density
+        binding.controls.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        binding.sliderRow.layoutParams = LinearLayout.LayoutParams(
+            if (landscape) 0 else LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            if (landscape) 1f else 0f
+        ).apply {
+            if (landscape) marginStart = (16 * density).toInt() else topMargin = (4 * density).toInt()
+        }
+    }
+
+    /** Tell the camera which way up the screen is, so preview and analysis frames match it. */
+    private fun updateTargetRotation() {
+        val rotation = binding.previewView.display?.rotation ?: return
+        preview?.targetRotation = rotation
+        analysis?.targetRotation = rotation
     }
 
     /** Higher slider = more sensitive = fewer pixels need to change to trigger. */
@@ -150,15 +195,22 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
                 .setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it)
         }
 
-        val preview = previewBuilder.build().also {
+        val rotation = binding.previewView.display?.rotation ?: android.view.Surface.ROTATION_0
+        previewBuilder.setTargetRotation(rotation)
+        analysisBuilder.setTargetRotation(rotation)
+
+        val p = previewBuilder.build().also {
             it.setSurfaceProvider(binding.previewView.surfaceProvider)
         }
-        val analysis = analysisBuilder.build().also {
+        val a = analysisBuilder.build().also {
             it.setAnalyzer(cameraExecutor, timer)
         }
+        preview = p
+        analysis = a
 
         provider.unbindAll()
-        camera = provider.bindToLifecycle(this, selector, preview, analysis)
+        camera = provider.bindToLifecycle(this, selector, p, a)
+        binding.previewView.post { updateTargetRotation() }
     }
 
     @OptIn(ExperimentalCamera2Interop::class)
@@ -236,6 +288,14 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         }
     }
 
+    override fun onBoxesRotated(start: RectF, finish: RectF) {
+        runOnUiThread {
+            binding.overlay.startBox.set(start)
+            binding.overlay.finishBox.set(finish)
+            binding.overlay.invalidate()
+        }
+    }
+
     // ---------------- helpers ----------------
 
     private fun showResults() {
@@ -260,6 +320,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
 
     override fun onDestroy() {
         super.onDestroy()
+        getSystemService(DisplayManager::class.java).unregisterDisplayListener(displayListener)
         cameraExecutor.shutdown()
         tone?.release()
     }

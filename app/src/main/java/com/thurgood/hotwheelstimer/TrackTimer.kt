@@ -30,6 +30,11 @@ class TrackTimer(private val listener: Listener) : ImageAnalysis.Analyzer {
         fun onFrame(info: FrameInfo)
         fun onRaceFinished(elapsedNanos: Long)
         fun onRaceTimedOut()
+        /**
+         * The phone was rotated, so the camera image is now shown the other way round. The boxes
+         * have been remapped to stay over the same piece of track; the UI should show these.
+         */
+        fun onBoxesRotated(start: RectF, finish: RectF)
     }
 
     enum class State { IDLE, ARMING, READY, RUNNING }
@@ -73,6 +78,7 @@ class TrackTimer(private val listener: Listener) : ImageAnalysis.Analyzer {
     private var state = State.IDLE
     private var startTimeNs = 0L
 
+    private var lastRot = -1
     private var geomKey = ""
     private var startIdx = IntArray(0)
     private var finishIdx = IntArray(0)
@@ -114,6 +120,21 @@ class TrackTimer(private val listener: Listener) : ImageAnalysis.Analyzer {
         val aspect = if (rot % 180 == 0) w.toFloat() / h else h.toFloat() / w
 
         val fps = recordTimestamp(ts)
+
+        // Phone rotated: keep the boxes over the same spot of track (fixed in sensor coordinates).
+        if (lastRot != -1 && rot != lastRot) {
+            val s: RectF
+            val f: RectF
+            synchronized(boxLock) {
+                startBoxN.set(rotateBox(startBoxN, lastRot, rot))
+                finishBoxN.set(rotateBox(finishBoxN, lastRot, rot))
+                boxesDirty = true
+                s = RectF(startBoxN)
+                f = RectF(finishBoxN)
+            }
+            listener.onBoxesRotated(s, f)
+        }
+        lastRot = rot
 
         // Rebuild sample positions if the boxes or frame geometry changed.
         val key = "$w,$h,$rot,$rowStride,$pixStride"
@@ -216,6 +237,31 @@ class TrackTimer(private val listener: Listener) : ImageAnalysis.Analyzer {
         return n.toFloat() / cur.size
     }
 
+    /** Upright (on-screen) normalised point -> normalised position in the camera buffer. */
+    private fun toSensor(u: Float, v: Float, rot: Int): Pair<Float, Float> = when (rot) {
+        90 -> v to (1f - u)
+        180 -> (1f - u) to (1f - v)
+        270 -> (1f - v) to u
+        else -> u to v
+    }
+
+    /** Normalised camera-buffer point -> upright (on-screen) normalised point. */
+    private fun fromSensor(x: Float, y: Float, rot: Int): Pair<Float, Float> = when (rot) {
+        90 -> (1f - y) to x
+        180 -> (1f - x) to (1f - y)
+        270 -> y to (1f - x)
+        else -> x to y
+    }
+
+    /** Re-expresses a box drawn for one rotation in the coordinates of another rotation. */
+    private fun rotateBox(box: RectF, fromRot: Int, toRot: Int): RectF {
+        val (ax, ay) = toSensor(box.left, box.top, fromRot)
+        val (bx, by) = toSensor(box.right, box.bottom, fromRot)
+        val (au, av) = fromSensor(ax, ay, toRot)
+        val (bu, bv) = fromSensor(bx, by, toRot)
+        return RectF(min(au, bu), min(av, bv), max(au, bu), max(av, bv))
+    }
+
     /**
      * Converts a box given in normalised *upright* image coordinates (what you see on screen)
      * into byte offsets in the camera's Y plane, which may be stored rotated.
@@ -233,12 +279,7 @@ class TrackTimer(private val listener: Listener) : ImageAnalysis.Analyzer {
             val v = box.top + (r + 0.5f) / rows * box.height()
             for (c in 0 until cols) {
                 val u = box.left + (c + 0.5f) / cols * box.width()
-                val (fx, fy) = when (rot) {
-                    90 -> v to (1f - u)
-                    180 -> (1f - u) to (1f - v)
-                    270 -> (1f - v) to u
-                    else -> u to v
-                }
+                val (fx, fy) = toSensor(u, v, rot)
                 val x = (fx * w).toInt().coerceIn(0, w - 1)
                 val y = (fy * h).toInt().coerceIn(0, h - 1)
                 out[k++] = y * rowStride + x * pixStride
