@@ -18,6 +18,8 @@ data class LeaderboardEntry(
     val timeSecs: Double,
     val photo: String?,
     val savedAt: Long,
+    /** Track length when this run was saved (metres), if it had been measured. */
+    val distanceM: Double? = null,
 )
 
 /**
@@ -47,6 +49,7 @@ object Leaderboard {
                     timeSecs = o.getDouble("time"),
                     photo = o.optString("photo").ifEmpty { null },
                     savedAt = o.optLong("savedAt"),
+                    distanceM = o.optDouble("distance").takeIf { !it.isNaN() && it > 0 },
                 )
             }
         } catch (e: Exception) {
@@ -64,6 +67,7 @@ object Leaderboard {
                 put("time", it.timeSecs)
                 put("photo", it.photo ?: "")
                 put("savedAt", it.savedAt)
+                it.distanceM?.let { d -> put("distance", d) }
             })
         }
         val f = file(ctx)
@@ -77,9 +81,13 @@ object Leaderboard {
         }
     }
 
-    fun add(ctx: Context, name: String, timeSecs: Double, photo: String?) {
+    fun add(ctx: Context, name: String, timeSecs: Double, photo: String?, distanceM: Double?) {
         val list = load(ctx)
-        list.add(LeaderboardEntry(UUID.randomUUID().toString(), name.trim(), timeSecs, photo, System.currentTimeMillis()))
+        list.add(
+            LeaderboardEntry(
+                UUID.randomUUID().toString(), name.trim(), timeSecs, photo, System.currentTimeMillis(), distanceM
+            )
+        )
         write(ctx, list)
     }
 

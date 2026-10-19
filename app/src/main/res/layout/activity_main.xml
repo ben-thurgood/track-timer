@@ -49,6 +49,17 @@
                 android:textSize="40sp"
                 android:textStyle="bold" />
 
+            <!-- Speed after a run, when the track length is known -->
+            <TextView
+                android:id="@+id/speedText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="#FFD600"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/statusText"
                 android:layout_width="wrap_content"
@@ -159,6 +170,14 @@
                 android:layout_weight="1"
                 android:max="100"
                 android:progress="70" />
+
+            <Button
+                android:id="@+id/trackButton"
+                style="?android:attr/buttonStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="📏 Measure" />
 
             <Button
                 android:id="@+id/clearButton"

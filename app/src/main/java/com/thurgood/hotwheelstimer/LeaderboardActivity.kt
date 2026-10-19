@@ -92,7 +92,10 @@ class LeaderboardActivity : AppCompatActivity() {
             val e = rows[position]
             b.rank.text = rankLabel(position + 1)
             b.name.text = e.name
-            b.date.text = dateFormat.format(Date(e.savedAt))
+            val date = dateFormat.format(Date(e.savedAt))
+            b.date.text = e.distanceM?.let { d ->
+                String.format(Locale.UK, "%s · 🚀 %.0f scale mph", date, Speed.scaleMph(d, e.timeSecs))
+            } ?: date
             b.time.text = formatTime(e.timeSecs)
             bindPhoto(e, b.photo, b.noPhoto, 160)
             return b.root
@@ -114,7 +117,8 @@ class LeaderboardActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (240 * density).toInt()))
         }
         content.addView(TextView(this).apply {
-            text = "${rankLabel(rank)}  ${formatTime(e.timeSecs)}\n${dateFormat.format(Date(e.savedAt))}"
+            text = "${rankLabel(rank)}  ${formatTime(e.timeSecs)}\n${dateFormat.format(Date(e.savedAt))}" +
+                (e.distanceM?.let { "\n\n" + Speed.detailed(it, e.timeSecs) } ?: "")
             textSize = 18f
             setPadding(0, pad / 2, 0, 0)
         })

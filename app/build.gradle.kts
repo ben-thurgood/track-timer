@@ -55,5 +55,8 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
     implementation("androidx.core:core-ktx:1.15.0")
+
+    // ARCore: measures the track's real length through the camera (Measure screen).
+    implementation("com.google.ar:core:1.48.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
 }

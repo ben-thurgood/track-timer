@@ -11,6 +11,9 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.HotWheelsTimer">
 
+        <!-- AR is optional: the app still installs on phones without ARCore; measuring falls back to typing a length. -->
+        <meta-data android:name="com.google.ar.core" android:value="optional" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -21,6 +24,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MeasureActivity"
+            android:exported="false"
+            android:screenOrientation="fullUser"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
 
         <activity
             android:name=".LeaderboardActivity"

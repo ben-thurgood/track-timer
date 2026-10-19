@@ -17,7 +17,9 @@ import android.util.Size
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.text.InputType
 import android.widget.ArrayAdapter
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.SeekBar
@@ -42,6 +44,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
+import com.google.ar.core.ArCoreApk
 import com.thurgood.hotwheelstimer.TrackTimer.State
 import com.thurgood.hotwheelstimer.databinding.ActivityMainBinding
 import com.thurgood.hotwheelstimer.databinding.DialogSaveBinding
@@ -71,6 +74,22 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
     private var lastState = State.IDLE
     private var fpsRangeText = ""
     private val results = mutableListOf<Double>()
+
+    private var cameraProvider: ProcessCameraProvider? = null
+    /** True while the camera is handed over to the AR Measure screen. */
+    private var cameraReleased = false
+    /** Measured (or typed) track length in metres, remembered between launches. */
+    private var trackLengthM: Double? = null
+
+    private val measureLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val data = result.data
+            if (result.resultCode == RESULT_OK && data != null) {
+                setTrackLength(data.getDoubleExtra(MeasureActivity.EXTRA_METERS, 0.0))
+            } else if (data?.getBooleanExtra(MeasureActivity.EXTRA_AR_UNAVAILABLE, false) == true) {
+                showLengthDialog()
+            }
+        }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -124,6 +143,12 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
             override fun onStopTrackingTouch(sb: SeekBar) {}
         })
         applySensitivity(binding.sensitivityBar.progress)
+
+        trackLengthM = getSharedPreferences("settings", MODE_PRIVATE)
+            .getFloat("trackLengthM", 0f).toDouble().takeIf { it > 0 }
+        updateTrackButton()
+        binding.trackButton.setOnClickListener { openMeasure() }
+        binding.trackButton.setOnLongClickListener { showLengthDialog(); true }
         showResults()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
@@ -173,7 +198,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
             b.resultsText.background = null
             b.leaderboardButton.text = "🏆"
             b.saveButton.text = "💾 Save"
-            b.sensitivityLabel.text = "Sens."
+            b.sensitivityLabel.visibility = View.GONE
             b.panelB.addView(b.logo, lin(wrap, dp(40)).apply { topMargin = dp(4) })
             b.panelB.addView(b.timerBox, lin(match, wrap).apply { topMargin = dp(4) })
             b.panelB.addView(b.resultsText, lin(match, 0, 1f).apply { topMargin = dp(6) })
@@ -186,7 +211,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
             b.timeText.textSize = 40f
             b.leaderboardButton.text = "🏆 Leaderboard"
             b.saveButton.text = "💾 Save"
-            b.sensitivityLabel.text = "Sensitivity"
+            b.sensitivityLabel.visibility = View.VISIBLE
             b.panelA.addView(b.logo, lin(wrap, dp(44)).apply { marginEnd = dp(10) })
             b.panelA.addView(b.timerBox, lin(wrap, wrap))
             b.resultsText.setBackgroundColor(0x99000000.toInt())
@@ -281,6 +306,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         preview = p
         analysis = a
 
+        cameraProvider = provider
         provider.unbindAll()
         camera = provider.bindToLifecycle(this, selector, p, a)
         binding.previewView.post { updateTargetRotation() }
@@ -326,7 +352,10 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
 
             if (info.state == State.RUNNING && lastState != State.RUNNING) beep(ToneGenerator.TONE_PROP_BEEP)
             if (info.state == State.RUNNING) binding.timeText.text = formatSecs(info.elapsedNanos / 1e9)
-            if (info.state == State.READY && lastState != State.READY) binding.timeText.text = formatSecs(0.0)
+            if (info.state == State.READY && lastState != State.READY) {
+                binding.timeText.text = formatSecs(0.0)
+                binding.speedText.visibility = View.GONE
+            }
 
             val label = when (info.state) {
                 State.IDLE -> "Drag the boxes, then press Ready!"
@@ -355,6 +384,10 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
             binding.timeText.text = formatSecs(secs)
             showResults()
             unsavedTime = secs
+            trackLengthM?.let {
+                binding.speedText.text = Speed.short(it, secs)
+                binding.speedText.visibility = View.VISIBLE
+            }
             updateSaveButton()
         }
     }
@@ -372,6 +405,72 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
             binding.overlay.finishBox.set(finish)
             binding.overlay.invalidate()
         }
+    }
+
+    // ---------------- track length (AR measuring) ----------------
+
+    override fun onStart() {
+        super.onStart()
+        // Back from the Measure screen: take the camera back for timing.
+        if (cameraReleased) {
+            cameraReleased = false
+            startCamera()
+        }
+    }
+
+    private fun openMeasure() {
+        if (ArCoreApk.getInstance().checkAvailability(this).isUnsupported) {
+            Toast.makeText(this, "This phone can't do AR measuring – type the length instead", Toast.LENGTH_LONG).show()
+            showLengthDialog()
+            return
+        }
+        if (lastState != State.IDLE) {
+            timer.disarm()
+            setAutoLocks(false)
+        }
+        // AR needs the camera to itself, so let go of it until we come back.
+        cameraProvider?.unbindAll()
+        cameraReleased = true
+        measureLauncher.launch(Intent(this, MeasureActivity::class.java))
+    }
+
+    /** Type the track length in by hand (long-press 📏, or phones without AR). */
+    private fun showLengthDialog() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            hint = "Length in cm"
+            trackLengthM?.let { setText(String.format(Locale.UK, "%.0f", it * 100)) }
+            setSelectAllOnFocus(true)
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) }
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Track length (cm)")
+            .setMessage("From the START box to the FINISH box, following the track.")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                val cm = input.text.toString().replace(',', '.').toDoubleOrNull()
+                if (cm != null && cm > 0) setTrackLength(cm / 100) else setTrackLength(null)
+            }
+            .setNegativeButton("Cancel", null)
+        if (trackLengthM != null) builder.setNeutralButton("Remove") { _, _ -> setTrackLength(null) }
+        builder.setOnDismissListener { hideSystemBars() }
+        builder.show()
+    }
+
+    private fun setTrackLength(meters: Double?) {
+        trackLengthM = meters?.takeIf { it > 0.01 }
+        getSharedPreferences("settings", MODE_PRIVATE).edit()
+            .putFloat("trackLengthM", (trackLengthM ?: 0.0).toFloat()).apply()
+        updateTrackButton()
+        binding.speedText.visibility = View.GONE
+        trackLengthM?.let {
+            Toast.makeText(this, "Track length set to ${Speed.length(it)}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun updateTrackButton() {
+        binding.trackButton.text = trackLengthM?.let { "📏 " + Speed.length(it) } ?: "📏 Measure"
     }
 
     // ---------------- saving to the leaderboard ----------------
@@ -442,7 +541,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
                     return@setOnClickListener
                 }
                 val photo = pendingPhoto ?: Leaderboard.photoForCar(this, name)
-                Leaderboard.add(this, name, time, photo)
+                Leaderboard.add(this, name, time, photo, trackLengthM)
                 pendingPhoto = null          // now belongs to the leaderboard
                 unsavedTime = null
                 updateSaveButton()

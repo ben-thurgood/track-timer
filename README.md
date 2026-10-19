@@ -17,6 +17,14 @@ An Android app that times Hot Wheels cars between a START and FINISH box drawn o
 4. Let the car go. You'll hear a beep at the start and another at the finish, and the time is added to the list (★ marks the best).
 5. Press **Ready!** again for the next run.
 
+### Measuring the track and speed
+
+- Press **📏 Measure** to measure the track with AR. Slowly sweep the phone over the track until the crosshair turns green. Aim it at the START line and press **＋ Add point** (or tap the screen). Then add a point at each bend and up or down each ramp, finishing at the FINISH line. Press **✓ Use** when you're done.
+- The first time, the phone may ask to install **Google Play Services for AR** from the Play Store.
+- More points around curves give a more accurate length. Undo removes the last point.
+- On phones without AR, or if you'd rather type it, **long-press** the 📏 button and enter the length in cm.
+- Once the length is set, each run shows its speed in m/s and its **scale mph**. Hot Wheels are 1:64 scale, so scale mph is how fast a real car would be going. Saved runs remember the track length, so the leaderboard shows their scale speed too.
+
 ### Leaderboard
 
 - After a race, press **💾 Save** to keep that time. Tap the picture box to photograph the car with the phone's camera app, then type its name and press Save. If you pick a car you've saved before, its old photo is reused automatically.
@@ -31,7 +39,7 @@ A car already sitting in the start box when you press Ready is fine. The clock s
 - **Sensitivity slider**: if it triggers on its own, slide it left. If it misses fast cars, slide it right or make the boxes a bit longer along the track.
 - The boxes fill with colour as they detect change. That helps you see what the app sees.
 - **Lighting**: even, bright light with no flickering lamps and no shadows moving across the boxes.
-- The top-left corner shows the actual **fps**. Timing is accurate to about one frame (±17 ms at 60 fps, ±33 ms at 30 fps).
+- The line under the timer shows the actual **fps**. Timing is accurate to about one frame (±17 ms at 60 fps, ±33 ms at 30 fps).
 
 ## How the code is laid out
 
@@ -41,6 +49,8 @@ A car already sitting in the start box when you press Ready is fine. The clock s
 | `OverlayView.kt` | Draws the boxes and handles dragging and resizing |
 | `Leaderboard.kt` | Saves and loads leaderboard times and car photos |
 | `LeaderboardActivity.kt` | The leaderboard screen |
+| `MeasureActivity.kt`, `MeasureOverlay.kt`, `BackgroundRenderer.kt` | AR track measuring (ARCore) |
+| `Speed.kt` | m/s, km/h and 1:64 scale mph |
 | `TrackTimer.kt` | Runs on each frame: compares pixels in each box with the empty-track baseline, starts and stops the clock using the camera's frame timestamps |
 
 ## Ideas for next steps
