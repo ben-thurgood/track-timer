@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Works in portrait and landscape: camera area fills the space above the control bar.
-     MainActivity flips the control bar between one row (landscape) and two rows (portrait). -->
+<!--
+  Full-screen layout: [panelA] [camera] [panelB], all on black.
+    Portrait  : stacked top-to-bottom. panelA = timer + status, panelB = buttons + slider.
+    Landscape : side by side. panelA hidden, panelB = a right-hand column with everything.
+  MainActivity.arrangeFor() moves the widgets into the right panel when the phone rotates,
+  so the timer and buttons always sit in the black space, never over the camera picture.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -9,79 +14,84 @@
     android:keepScreenOn="true"
     android:orientation="vertical">
 
+    <LinearLayout
+        android:id="@+id/panelA"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingTop="6dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/timeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="0.000 s"
+            android:textColor="#FFFFFF"
+            android:textSize="40sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Starting camera…"
+            android:textColor="#CCCCCC"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <FrameLayout
+        android:id="@+id/cameraFrame"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <!-- Camera feed. fitCenter so the whole frame is visible and the boxes map 1:1 to the analysed image. -->
+        <!-- fitCenter: the whole camera frame is visible and the boxes map 1:1 to what's analysed. -->
         <androidx.camera.view.PreviewView
             android:id="@+id/previewView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             app:scaleType="fitCenter" />
 
-        <!-- Draggable START / FINISH boxes drawn over the preview -->
         <com.thurgood.hotwheelstimer.OverlayView
             android:id="@+id/overlay"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- Big timer readout -->
-        <TextView
-            android:id="@+id/timeText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|center_horizontal"
-            android:layout_marginTop="8dp"
-            android:background="#99000000"
-            android:fontFamily="monospace"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="4dp"
-            android:text="0.000 s"
-            android:textColor="#FFFFFF"
-            android:textSize="40sp"
-            android:textStyle="bold" />
-
-        <!-- Results list, top right, below the timer so they never overlap in portrait -->
+        <!-- Results: overlaid top-right in portrait, moved into the side column in landscape. -->
         <TextView
             android:id="@+id/resultsText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"
-            android:layout_marginTop="76dp"
-            android:layout_marginEnd="8dp"
+            android:layout_margin="6dp"
             android:background="#99000000"
             android:fontFamily="monospace"
-            android:minWidth="120dp"
+            android:minWidth="110dp"
             android:padding="6dp"
             android:text="Results"
             android:textColor="#FFFFFF"
-            android:textSize="14sp" />
-
-        <!-- Status + fps, bottom left of the camera area -->
-        <TextView
-            android:id="@+id/statusText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|start"
-            android:layout_margin="8dp"
-            android:background="#99000000"
-            android:padding="6dp"
-            android:text="Starting camera…"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            android:textSize="13sp" />
     </FrameLayout>
 
-    <!-- Control bar: horizontal in landscape, vertical (two rows) in portrait -->
     <LinearLayout
-        android:id="@+id/controls"
+        android:id="@+id/panelB"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#222222"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="8dp">
+        android:orientation="vertical"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp">
+
+        <ImageView
+            android:id="@+id/logo"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:adjustViewBounds="true"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/logo" />
 
         <LinearLayout
             android:id="@+id/buttonRow"
@@ -89,15 +99,6 @@
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
-
-            <ImageView
-                android:id="@+id/logo"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:layout_marginEnd="8dp"
-                android:adjustViewBounds="true"
-                android:contentDescription="@string/app_name"
-                android:src="@drawable/logo" />
 
             <Button
                 android:id="@+id/armButton"
@@ -116,10 +117,8 @@
 
         <LinearLayout
             android:id="@+id/sliderRow"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_weight="1"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -127,7 +126,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Sensitivity"
-                android:textColor="#FFFFFF" />
+                android:textColor="#FFFFFF"
+                android:textSize="13sp" />
 
             <SeekBar
                 android:id="@+id/sensitivityBar"

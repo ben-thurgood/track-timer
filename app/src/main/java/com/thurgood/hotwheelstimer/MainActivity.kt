@@ -6,13 +6,17 @@ import android.content.res.Configuration
 import android.graphics.RectF
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.display.DisplayManager
-import android.widget.LinearLayout
 import android.hardware.camera2.CaptureRequest
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
 import android.util.Range
 import android.util.Size
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +36,10 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.thurgood.hotwheelstimer.TrackTimer.State
 import com.thurgood.hotwheelstimer.databinding.ActivityMainBinding
 import java.util.Locale
@@ -69,11 +77,19 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        hideSystemBars()
+
+        // Keep the timer and buttons clear of any camera hole-punch / notch.
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+            val c = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            v.setPadding(c.left, c.top, c.right, c.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         tone = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 80) }.getOrNull()
 
-        applyControlsLayout(resources.configuration.orientation)
+        arrangeFor(resources.configuration.orientation)
         getSystemService(DisplayManager::class.java).registerDisplayListener(displayListener, null)
 
         binding.overlay.onBoxesChanged = { pushBoxes() }
@@ -111,21 +127,74 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        applyControlsLayout(newConfig.orientation)
+        arrangeFor(newConfig.orientation)
         updateTargetRotation()
     }
 
-    /** Landscape: buttons and slider on one row. Portrait: buttons row, then slider row. */
-    private fun applyControlsLayout(orientation: Int) {
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    /** Full screen: hide the status bar and the Android buttons. Swipe from an edge to show them briefly. */
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    /**
+     * Puts the timer, results and controls into the black panels around the camera.
+     * Portrait : timer + status on top, logo/buttons + slider underneath, results over the picture's corner.
+     * Landscape: everything in one column on the right, camera fills the rest.
+     */
+    private fun arrangeFor(orientation: Int) {
         val landscape = orientation == Configuration.ORIENTATION_LANDSCAPE
+        val b = binding
         val density = resources.displayMetrics.density
-        binding.controls.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-        binding.sliderRow.layoutParams = LinearLayout.LayoutParams(
-            if (landscape) 0 else LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            if (landscape) 1f else 0f
-        ).apply {
-            if (landscape) marginStart = (16 * density).toInt() else topMargin = (4 * density).toInt()
+        fun dp(v: Int) = (v * density).toInt()
+        val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
+        val match = ViewGroup.LayoutParams.MATCH_PARENT
+        fun lin(w: Int, h: Int, weight: Float = 0f) = LinearLayout.LayoutParams(w, h, weight)
+
+        // Detach the movable widgets from wherever they currently are.
+        listOf(b.timeText, b.statusText, b.resultsText, b.logo, b.buttonRow, b.sliderRow)
+            .forEach { (it.parent as? ViewGroup)?.removeView(it) }
+
+        b.root.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        b.cameraFrame.layoutParams = if (landscape) lin(0, match, 1f) else lin(match, 0, 1f)
+        b.panelB.gravity = Gravity.CENTER_HORIZONTAL
+
+        if (landscape) {
+            b.panelA.visibility = View.GONE
+            b.panelB.layoutParams = lin(dp(224), match)
+            b.timeText.textSize = 34f
+            b.resultsText.background = null
+            b.panelB.addView(b.logo, lin(wrap, dp(40)).apply { topMargin = dp(4) })
+            b.panelB.addView(b.timeText, lin(wrap, wrap).apply { topMargin = dp(4) })
+            b.panelB.addView(b.statusText, lin(match, wrap))
+            b.panelB.addView(b.resultsText, lin(match, 0, 1f).apply { topMargin = dp(6) })
+            b.panelB.addView(b.buttonRow, lin(wrap, wrap))
+            b.panelB.addView(b.sliderRow, lin(match, wrap))
+        } else {
+            b.panelA.visibility = View.VISIBLE
+            b.panelA.layoutParams = lin(match, wrap)
+            b.panelB.layoutParams = lin(match, wrap)
+            b.timeText.textSize = 40f
+            b.panelA.addView(b.timeText, lin(wrap, wrap))
+            b.panelA.addView(b.statusText, lin(wrap, wrap))
+            b.resultsText.setBackgroundColor(0x99000000.toInt())
+            b.cameraFrame.addView(
+                b.resultsText,
+                FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.END).apply {
+                    setMargins(dp(6), dp(6), dp(6), dp(6))
+                }
+            )
+            b.buttonRow.addView(b.logo, 0, lin(wrap, dp(44)).apply { marginEnd = dp(8) })
+            b.panelB.addView(b.buttonRow, lin(wrap, wrap))
+            b.panelB.addView(b.sliderRow, lin(match, wrap))
         }
     }
 
@@ -165,10 +234,11 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         val fpsRange = pickFpsRange(provider, selector)
         fpsRangeText = fpsRange?.let { "${it.lower}-${it.upper}" } ?: "default"
 
-        // Same 4:3 shape for preview and analysis so the boxes line up with what's analysed.
+        // Same 16:9 shape for preview and analysis so the boxes line up with what's analysed.
+        // 16:9 fills far more of a modern tall phone screen than 4:3.
         val previewBuilder = Preview.Builder().setResolutionSelector(
             ResolutionSelector.Builder()
-                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
                 .build()
         )
 
@@ -176,10 +246,10 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         val analysisBuilder = ImageAnalysis.Builder()
             .setResolutionSelector(
                 ResolutionSelector.Builder()
-                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
                     .setResolutionStrategy(
                         ResolutionStrategy(
-                            Size(640, 480),
+                            Size(640, 360),
                             ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
                         )
                     )
@@ -262,8 +332,8 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
                 State.RUNNING -> "Racing!"
             }
             binding.statusText.text = String.format(
-                Locale.UK, "%s\n%.0f fps (asked %s) · ±%.0f ms",
-                label, info.fps, fpsRangeText, if (info.fps > 0) 1000 / info.fps else 0f
+                Locale.UK, "%s · %.0f fps · ±%.0f ms",
+                label, info.fps, if (info.fps > 0) 1000 / info.fps else 0f
             )
             binding.armButton.text = if (info.state == State.IDLE) "Ready!" else "Cancel"
             lastState = info.state
