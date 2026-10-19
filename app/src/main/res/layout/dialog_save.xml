@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Save this time" dialog: car photo + name. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:id="@+id/saveTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="0.000 s"
+            android:textColor="#FFD600"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+
+        <!-- Tap the picture (or the button) to take a photo of the car. -->
+        <FrameLayout
+            android:id="@+id/photoFrame"
+            android:layout_width="180dp"
+            android:layout_height="135dp"
+            android:layout_marginTop="12dp"
+            android:background="#333333"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?android:attr/selectableItemBackground">
+
+            <ImageView
+                android:id="@+id/photoPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="Car photo"
+                android:scaleType="centerCrop" />
+
+            <TextView
+                android:id="@+id/photoHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="📷\nTap to take a\nphoto of the car"
+                android:textColor="#CCCCCC"
+                android:textSize="14sp" />
+        </FrameLayout>
+
+        <Button
+            android:id="@+id/takePhotoButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="📷 Take photo" />
+
+        <AutoCompleteTextView
+            android:id="@+id/carName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:completionThreshold="1"
+            android:hint="Car name"
+            android:imeOptions="actionDone"
+            android:inputType="textCapWords"
+            android:maxLength="30"
+            android:singleLine="true" />
+    </LinearLayout>
+</ScrollView>

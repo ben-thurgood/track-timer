@@ -1,6 +1,8 @@
 package com.thurgood.hotwheelstimer
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.RectF
@@ -15,12 +17,14 @@ import android.util.Size
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -36,15 +40,16 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.content.FileProvider
+import androidx.core.widget.doAfterTextChanged
 import com.thurgood.hotwheelstimer.TrackTimer.State
 import com.thurgood.hotwheelstimer.databinding.ActivityMainBinding
+import com.thurgood.hotwheelstimer.databinding.DialogSaveBinding
+import java.io.File
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity(), TrackTimer.Listener {
 
@@ -77,14 +82,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        hideSystemBars()
-
-        // Keep the timer and buttons clear of any camera hole-punch / notch.
-        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
-            val c = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
-            v.setPadding(c.left, c.top, c.right, c.bottom)
-            WindowInsetsCompat.CONSUMED
-        }
+        enterFullScreen(binding.root)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         tone = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 80) }.getOrNull()
@@ -103,6 +101,16 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
                 timer.disarm()
                 setAutoLocks(false)
             }
+        }
+
+        binding.saveButton.setOnClickListener { openSaveDialog() }
+
+        binding.leaderboardButton.setOnClickListener {
+            if (lastState != State.IDLE) {
+                timer.disarm()
+                setAutoLocks(false)
+            }
+            startActivity(Intent(this, LeaderboardActivity::class.java))
         }
 
         binding.clearButton.setOnClickListener {
@@ -136,18 +144,9 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         if (hasFocus) hideSystemBars()
     }
 
-    /** Full screen: hide the status bar and the Android buttons. Swipe from an edge to show them briefly. */
-    private fun hideSystemBars() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-    }
-
     /**
      * Puts the timer, results and controls into the black panels around the camera.
-     * Portrait : timer + status on top, logo/buttons + slider underneath, results over the picture's corner.
+     * Portrait : logo + timer on top, buttons + slider underneath, session results over the picture's corner.
      * Landscape: everything in one column on the right, camera fills the rest.
      */
     private fun arrangeFor(orientation: Int) {
@@ -160,7 +159,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         fun lin(w: Int, h: Int, weight: Float = 0f) = LinearLayout.LayoutParams(w, h, weight)
 
         // Detach the movable widgets from wherever they currently are.
-        listOf(b.timeText, b.statusText, b.resultsText, b.logo, b.buttonRow, b.sliderRow)
+        listOf(b.logo, b.timerBox, b.resultsText, b.buttonRow, b.sliderRow)
             .forEach { (it.parent as? ViewGroup)?.removeView(it) }
 
         b.root.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
@@ -169,22 +168,27 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
 
         if (landscape) {
             b.panelA.visibility = View.GONE
-            b.panelB.layoutParams = lin(dp(224), match)
+            b.panelB.layoutParams = lin(dp(240), match)
             b.timeText.textSize = 34f
             b.resultsText.background = null
+            b.leaderboardButton.text = "🏆"
+            b.saveButton.text = "💾 Save"
+            b.sensitivityLabel.text = "Sens."
             b.panelB.addView(b.logo, lin(wrap, dp(40)).apply { topMargin = dp(4) })
-            b.panelB.addView(b.timeText, lin(wrap, wrap).apply { topMargin = dp(4) })
-            b.panelB.addView(b.statusText, lin(match, wrap))
+            b.panelB.addView(b.timerBox, lin(match, wrap).apply { topMargin = dp(4) })
             b.panelB.addView(b.resultsText, lin(match, 0, 1f).apply { topMargin = dp(6) })
-            b.panelB.addView(b.buttonRow, lin(wrap, wrap))
+            b.panelB.addView(b.buttonRow, lin(match, wrap))
             b.panelB.addView(b.sliderRow, lin(match, wrap))
         } else {
             b.panelA.visibility = View.VISIBLE
             b.panelA.layoutParams = lin(match, wrap)
             b.panelB.layoutParams = lin(match, wrap)
             b.timeText.textSize = 40f
-            b.panelA.addView(b.timeText, lin(wrap, wrap))
-            b.panelA.addView(b.statusText, lin(wrap, wrap))
+            b.leaderboardButton.text = "🏆 Leaderboard"
+            b.saveButton.text = "💾 Save"
+            b.sensitivityLabel.text = "Sensitivity"
+            b.panelA.addView(b.logo, lin(wrap, dp(44)).apply { marginEnd = dp(10) })
+            b.panelA.addView(b.timerBox, lin(wrap, wrap))
             b.resultsText.setBackgroundColor(0x99000000.toInt())
             b.cameraFrame.addView(
                 b.resultsText,
@@ -192,8 +196,7 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
                     setMargins(dp(6), dp(6), dp(6), dp(6))
                 }
             )
-            b.buttonRow.addView(b.logo, 0, lin(wrap, dp(44)).apply { marginEnd = dp(8) })
-            b.panelB.addView(b.buttonRow, lin(wrap, wrap))
+            b.panelB.addView(b.buttonRow, lin(match, wrap))
             b.panelB.addView(b.sliderRow, lin(match, wrap))
         }
     }
@@ -336,7 +339,10 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
                 label, info.fps, if (info.fps > 0) 1000 / info.fps else 0f
             )
             binding.armButton.text = if (info.state == State.IDLE) "Ready!" else "Cancel"
-            lastState = info.state
+            if (info.state != lastState) {
+                lastState = info.state
+                updateSaveButton()
+            }
         }
     }
 
@@ -348,6 +354,8 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
             results.add(0, secs)
             binding.timeText.text = formatSecs(secs)
             showResults()
+            unsavedTime = secs
+            updateSaveButton()
         }
     }
 
@@ -366,15 +374,123 @@ class MainActivity : AppCompatActivity(), TrackTimer.Listener {
         }
     }
 
+    // ---------------- saving to the leaderboard ----------------
+
+    /** The last finished time, until it's saved or the next race finishes. */
+    private var unsavedTime: Double? = null
+    private var dialogBinding: DialogSaveBinding? = null
+    /** Photo taken in the open Save dialog (file name in the cars folder), not yet saved. */
+    private var pendingPhoto: String? = null
+    private var captureFile: File? = null
+
+    /** Opens the phone's camera app to photograph the car; the photo comes back to captureFile. */
+    private val takePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val src = captureFile ?: return@registerForActivityResult
+        if (!ok) {
+            src.delete()
+            return@registerForActivityResult
+        }
+        thread {
+            val stored = Leaderboard.storePhoto(this, src)
+            src.delete()
+            runOnUiThread {
+                if (stored == null) {
+                    Toast.makeText(this, "Couldn't read that photo – try again", Toast.LENGTH_SHORT).show()
+                } else if (dialogBinding == null) {
+                    File(Leaderboard.photoDir(this), stored).delete()   // dialog was closed meanwhile
+                } else {
+                    pendingPhoto?.let { File(Leaderboard.photoDir(this), it).delete() }  // retake
+                    pendingPhoto = stored
+                    refreshSavePreview()
+                }
+            }
+        }
+    }
+
+    private fun updateSaveButton() {
+        binding.saveButton.isEnabled = unsavedTime != null && lastState == State.IDLE
+    }
+
+    private fun openSaveDialog() {
+        val time = unsavedTime ?: return
+        val d = DialogSaveBinding.inflate(layoutInflater)
+        dialogBinding = d
+        pendingPhoto = null
+
+        d.saveTime.text = formatSecs(time)
+        d.carName.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, Leaderboard.carNames(this))
+        )
+        // Picking a car that's been saved before shows (and reuses) its photo.
+        d.carName.doAfterTextChanged { refreshSavePreview() }
+        d.photoFrame.setOnClickListener { capturePhoto() }
+        d.takePhotoButton.setOnClickListener { capturePhoto() }
+        refreshSavePreview()
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Save this time")
+            .setView(d.root)
+            .setPositiveButton("Save", null)   // click handled below so an empty name keeps it open
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val name = d.carName.text.toString().trim()
+                if (name.isEmpty()) {
+                    d.carName.error = "Give the car a name"
+                    return@setOnClickListener
+                }
+                val photo = pendingPhoto ?: Leaderboard.photoForCar(this, name)
+                Leaderboard.add(this, name, time, photo)
+                pendingPhoto = null          // now belongs to the leaderboard
+                unsavedTime = null
+                updateSaveButton()
+                dialog.dismiss()
+                Toast.makeText(this, "Saved $name – ${formatSecs(time)}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.setOnDismissListener {
+            // Cancelled: throw away a photo that was taken but not saved.
+            pendingPhoto?.let { File(Leaderboard.photoDir(this), it).delete() }
+            pendingPhoto = null
+            dialogBinding = null
+            hideSystemBars()
+        }
+        dialog.show()
+    }
+
+    private fun refreshSavePreview() {
+        val d = dialogBinding ?: return
+        val name = d.carName.text.toString()
+        val photo = pendingPhoto ?: if (name.isNotBlank()) Leaderboard.photoForCar(this, name) else null
+        val bmp = Leaderboard.photoFile(this, photo)?.let { Leaderboard.loadThumb(it, 400) }
+        d.photoPreview.setImageBitmap(bmp)
+        d.photoHint.visibility = if (bmp == null) View.VISIBLE else View.GONE
+        d.takePhotoButton.text = if (pendingPhoto != null) "📷 Retake photo" else "📷 Take photo"
+    }
+
+    private fun capturePhoto() {
+        val dir = File(cacheDir, "captures").apply { mkdirs() }
+        val file = File(dir, "capture.jpg").apply { delete() }
+        captureFile = file
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        try {
+            takePicture.launch(uri)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(this, "No camera app found on this phone", Toast.LENGTH_LONG).show()
+        }
+    }
+
     // ---------------- helpers ----------------
 
     private fun showResults() {
         if (results.isEmpty()) {
-            binding.resultsText.text = "Results\n–"
+            binding.resultsText.text = "This session\n–"
             return
         }
         val best = results.min()
-        val sb = StringBuilder("Results\n")
+        val sb = StringBuilder("This session\n")
         results.take(10).forEachIndexed { i, r ->
             val n = results.size - i
             sb.append(String.format(Locale.UK, "%2d. %.3f%s\n", n, r, if (r == best) " ★" else ""))

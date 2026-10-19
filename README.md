@@ -17,6 +17,13 @@ An Android app that times Hot Wheels cars between a START and FINISH box drawn o
 4. Let the car go. You'll hear a beep at the start and another at the finish, and the time is added to the list (★ marks the best).
 5. Press **Ready!** again for the next run.
 
+### Leaderboard
+
+- After a race, press **💾 Save** to keep that time. Tap the picture box to photograph the car with the phone's camera app, then type its name and press Save. If you pick a car you've saved before, its old photo is reused automatically.
+- Press **🏆 Leaderboard** at any time to see saved times, fastest first, with medals for the top three. The button at the top switches between **Best per car** and **All runs**.
+- Tap a row to see the photo bigger, or to delete that run.
+- Times and photos are stored privately on the phone. Uninstalling the app removes them.
+
 A car already sitting in the start box when you press Ready is fine. The clock starts as soon as it moves off.
 
 ## Tuning
@@ -32,10 +39,12 @@ A car already sitting in the start box when you press Ready is fine. The clock s
 |---|---|
 | `MainActivity.kt` | Camera setup (CameraX), picks the fastest frame rate, buttons, results list |
 | `OverlayView.kt` | Draws the boxes and handles dragging and resizing |
+| `Leaderboard.kt` | Saves and loads leaderboard times and car photos |
+| `LeaderboardActivity.kt` | The leaderboard screen |
 | `TrackTimer.kt` | Runs on each frame: compares pixels in each box with the empty-track baseline, starts and stops the clock using the camera's frame timestamps |
 
 ## Ideas for next steps
 
 - **Higher frame rate:** many phones can do 120/240 fps only in slow-motion video mode. That would mean recording a clip and analysing it afterwards rather than live.
 - **Sub-frame accuracy:** estimate when the car crossed between two frames from how much of the box it covered.
-- Name the cars, save results between sessions, and add head-to-head races with two lanes (two finish boxes).
+- Add head-to-head races with two lanes (two finish boxes).

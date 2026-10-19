@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Full-screen layout: [panelA] [camera] [panelB], all on black.
-    Portrait  : stacked top-to-bottom. panelA = timer + status, panelB = buttons + slider.
+    Portrait  : stacked top-to-bottom. panelA = logo + timer, panelB = buttons + slider.
     Landscape : side by side. panelA hidden, panelB = a right-hand column with everything.
   MainActivity.arrangeFor() moves the widgets into the right panel when the phone rotates,
   so the timer and buttons always sit in the black space, never over the camera picture.
@@ -18,29 +18,46 @@
         android:id="@+id/panelA"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
         android:paddingTop="6dp"
         android:paddingBottom="4dp">
 
-        <TextView
-            android:id="@+id/timeText"
+        <ImageView
+            android:id="@+id/logo"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="0.000 s"
-            android:textColor="#FFFFFF"
-            android:textSize="40sp"
-            android:textStyle="bold" />
+            android:layout_height="44dp"
+            android:adjustViewBounds="true"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/logo" />
 
-        <TextView
-            android:id="@+id/statusText"
+        <LinearLayout
+            android:id="@+id/timerBox"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="Starting camera…"
-            android:textColor="#CCCCCC"
-            android:textSize="12sp" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/timeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:text="0.000 s"
+                android:textColor="#FFFFFF"
+                android:textSize="40sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Starting camera…"
+                android:textColor="#CCCCCC"
+                android:textSize="12sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <FrameLayout
@@ -61,7 +78,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- Results: overlaid top-right in portrait, moved into the side column in landscape. -->
+        <!-- This session's runs: overlaid top-right in portrait, moved into the side column in landscape. -->
         <TextView
             android:id="@+id/resultsText"
             android:layout_width="wrap_content"
@@ -72,7 +89,7 @@
             android:fontFamily="monospace"
             android:minWidth="110dp"
             android:padding="6dp"
-            android:text="Results"
+            android:text="This session"
             android:textColor="#FFFFFF"
             android:textSize="13sp" />
     </FrameLayout>
@@ -85,34 +102,39 @@
         android:paddingHorizontal="8dp"
         android:paddingVertical="4dp">
 
-        <ImageView
-            android:id="@+id/logo"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:adjustViewBounds="true"
-            android:contentDescription="@string/app_name"
-            android:src="@drawable/logo" />
-
         <LinearLayout
             android:id="@+id/buttonRow"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/armButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:minWidth="100dp"
+                android:layout_weight="1"
+                android:minWidth="0dp"
                 android:text="Ready!" />
 
             <Button
-                android:id="@+id/clearButton"
-                android:layout_width="wrap_content"
+                android:id="@+id/saveButton"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="Clear" />
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:minWidth="0dp"
+                android:text="💾 Save" />
+
+            <Button
+                android:id="@+id/leaderboardButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1.3"
+                android:minWidth="0dp"
+                android:text="🏆 Leaderboard" />
         </LinearLayout>
 
         <LinearLayout
@@ -123,6 +145,7 @@
             android:orientation="horizontal">
 
             <TextView
+                android:id="@+id/sensitivityLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Sensitivity"
@@ -136,6 +159,14 @@
                 android:layout_weight="1"
                 android:max="100"
                 android:progress="70" />
+
+            <Button
+                android:id="@+id/clearButton"
+                style="?android:attr/buttonStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="Clear" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
